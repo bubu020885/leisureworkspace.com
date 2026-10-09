@@ -46,6 +46,21 @@
       resetConfirm: 'Alle Eingaben zurücksetzen und mit leeren Feldern starten?',
       loadError: 'Die Datei konnte nicht gelesen werden.',
       kpiDb: 'Rohertrag pro Ticket',
+      beHead: 'Ab wann lohnt es sich?',
+      beEmpty: 'Gib einen Ticketpreis ein, um den Break-even zu sehen.',
+      beAnswer: 'Du musst mindestens {n} verkaufen, damit sich das Angebot rentiert.',
+      beDetail: 'Bei {a} machst du noch {l} Verlust, ab {b} bist du mit {g} im Plus. Jedes weitere Ticket bringt {d} zusätzlich.',
+      beCapacity: 'Das sind {p} deiner Kapazität von {c}.',
+      beNever: 'Mit diesen Annahmen rentiert sich das Angebot nie: Jedes Ticket kostet mehr, als es netto einbringt.',
+      beFromFirst: 'Es gibt keine Fixkosten, das Angebot lohnt sich ab dem ersten Ticket.',
+      targetLabel: 'Zielgewinn (€)',
+      targetAnswer: 'Für {z} Gewinn brauchst du {n}.',
+      targetNever: 'Ein Gewinn von {z} ist mit diesen Annahmen nicht erreichbar.',
+      targetOverCap: 'Das liegt über der Kapazität.',
+      tagTarget: 'Ziel',
+      cTickets: 'Tickets',
+      cRevenue: 'Umsatz brutto',
+      cResult: 'Ergebnis',
       kpiBe: 'Break-even ab',
       kpiNet: 'Nettoerlös pro Ticket',
       kpiPlan: 'Ergebnis bei Planmenge',
@@ -193,6 +208,21 @@
       resetConfirm: 'Reset all inputs and start with empty fields?',
       loadError: 'The file could not be read.',
       kpiDb: 'Gross profit per ticket',
+      beHead: 'When does it pay off?',
+      beEmpty: 'Enter a ticket price to see the break-even point.',
+      beAnswer: 'You need to sell at least {n} for the offer to pay off.',
+      beDetail: 'At {a} you still make a loss of {l}; from {b} you are {g} in profit. Every further ticket adds {d}.',
+      beCapacity: 'That is {p} of your capacity of {c}.',
+      beNever: 'With these assumptions the offer never pays off: each ticket costs more than it brings in net.',
+      beFromFirst: 'There are no fixed costs, so the offer pays off from the first ticket.',
+      targetLabel: 'Target profit (€)',
+      targetAnswer: 'For a profit of {z} you need {n}.',
+      targetNever: 'A profit of {z} cannot be reached with these assumptions.',
+      targetOverCap: 'That is above capacity.',
+      tagTarget: 'Target',
+      cTickets: 'Tickets',
+      cRevenue: 'Revenue gross',
+      cResult: 'Result',
       kpiBe: 'Break-even at',
       kpiNet: 'Net revenue per ticket',
       kpiPlan: 'Result at planned volume',
@@ -324,11 +354,11 @@
       price: 85, vat: 19, mode: 'standard',
       vars: ex.vars.map(r => ({ ...r })),
       fixes: ex.fixes.map(r => ({ ...r })),
-      planned: 45, capacity: 50
+      planned: 45, capacity: 50, target: null
     };
   }
   function emptyState() {
-    return { price: null, vat: 19, mode: 'standard', vars: [], fixes: [], planned: null, capacity: null };
+    return { price: null, vat: 19, mode: 'standard', vars: [], fixes: [], planned: null, capacity: null, target: null };
   }
 
   function safeGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
@@ -360,6 +390,7 @@
         name: String(r.name ?? ''), amount: num(r.amount), rvl: !!r.rvl
       })) : [],
       planned: num(s.planned),
+      target: num(s.target),
       capacity: num(s.capacity)
     };
   }
@@ -369,7 +400,7 @@
       price: state.price, vat: state.vat, mode: state.mode,
       vars: state.vars.map(({ name, amount, unit, rvl }) => ({ name, amount, unit, rvl })),
       fixes: state.fixes.map(({ name, amount, rvl }) => ({ name, amount, rvl })),
-      planned: state.planned, capacity: state.capacity
+      planned: state.planned, capacity: state.capacity, target: state.target
     };
   }
   function persist() { safeSet(STORAGE_KEY, JSON.stringify(serialize())); }
@@ -410,21 +441,24 @@
     }
     function contribution(N) { return result(N) + F; }
 
-    let be = null; // null = unreachable
-    if (F <= 0) be = 0;
-    else if (db > 0) {
-      let hi = Math.max(1, Math.ceil(Feff / db));
+    // Smallest whole ticket count whose total result reaches `target` (null = unreachable).
+    function ticketsFor(target) {
+      if (result(0) >= target - 1e-9) return 0;
+      if (db <= 0) return null;
+      let hi = Math.max(1, Math.ceil((Feff + target) / db));
       let guard = 0;
-      while (result(hi) < 0 && guard++ < 60) hi *= 2;
-      if (result(hi) >= 0) {
-        let lo = 0;
-        while (hi - lo > 1) {
-          const mid = Math.floor((lo + hi) / 2);
-          if (result(mid) >= -1e-9) hi = mid; else lo = mid;
-        }
-        be = hi;
+      while (result(hi) < target - 1e-9 && guard++ < 60) hi *= 2;
+      if (result(hi) < target - 1e-9) return null;
+      let lo = 0;
+      while (hi - lo > 1) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (result(mid) >= target - 1e-9) hi = mid; else lo = mid;
       }
+      return hi;
     }
+    const be = F <= 0 ? 0 : ticketsFor(0);
+    const target = s.target && s.target > 0 ? s.target : null;
+    const targetTickets = target ? ticketsFor(target) : null;
 
     const N = s.planned && s.planned > 0 ? Math.floor(s.planned) : null;
     let plan = null;
@@ -438,7 +472,7 @@
       };
     }
 
-    return { P, rate, k, margin, varRows, V, rvlVar, F, rvlFix, marginGross, vat, net, db, relief, Feff, be, plan, result, contribution };
+    return { P, rate, k, margin, varRows, V, rvlVar, F, rvlFix, marginGross, vat, net, db, relief, Feff, be, target, targetTickets, plan, result, contribution };
   }
 
   // Gross price at which N tickets exactly cover all costs (bisection).
@@ -481,7 +515,8 @@
   // ─── DOM refs ─────────────────────────────────────────
   const $ = id => document.getElementById(id);
   const el = {
-    price: $('price'), planned: $('planned'), capacity: $('capacity'),
+    price: $('price'), planned: $('planned'), capacity: $('capacity'), target: $('target'),
+    beBox: $('beBox'),
     vatGroup: $('vatGroup'), modeGroup: $('modeGroup'), modeHint: $('modeHint'),
     varList: $('varList'), fixList: $('fixList'), varChips: $('varChips'), fixChips: $('fixChips'),
     kpiDb: $('kpiDb'), kpiDbSub: $('kpiDbSub'), kpiBe: $('kpiBe'), kpiBeSub: $('kpiBeSub'),
@@ -587,6 +622,7 @@
     el.alert.hidden = msgs.length === 0;
     el.alert.innerHTML = msgs.map(esc).join('<br />');
 
+    renderBreakEven(c, hasPrice);
     renderScheme(c, hasPrice);
     renderCompare(hasPrice);
     renderChart(c, hasPrice);
@@ -595,6 +631,55 @@
   function setVal(node, text, v) {
     node.textContent = text;
     node.classList.toggle('neg', v < -0.004);
+  }
+
+  function renderBreakEven(c, hasPrice) {
+    if (!hasPrice) { el.beBox.innerHTML = `<p class="empty">${esc(t('beEmpty'))}</p>`; return; }
+    const tk = n => `${int(n)} ${n === 1 ? t('ticket') : t('tickets')}`;
+    let html = '';
+    if (c.be === null) {
+      html += `<p class="be-answer neg">${esc(t('beNever'))}</p>`;
+    } else if (c.F <= 0) {
+      html += `<p class="be-answer">${esc(t('beFromFirst'))}</p>`;
+    } else {
+      const before = c.result(c.be - 1), at = c.result(c.be);
+      html += `<p class="be-answer">${fill(esc(t('beAnswer')), { n: `<strong>${tk(c.be)}</strong>` })}</p>`;
+      html += `<p class="be-detail">${fill(esc(t('beDetail')), {
+        a: tk(c.be - 1), l: `<span class="neg">${eur(Math.abs(before))}</span>`,
+        b: tk(c.be), g: `<span class="pos">${eur(at)}</span>`, d: eur(c.db)
+      })}</p>`;
+      if (state.capacity > 0) {
+        const share = c.be / state.capacity;
+        html += `<div class="be-meter" role="img" aria-label="${esc(pct(share, 0))} ${esc(t('ofCapacity'))}"><span style="width:${Math.min(100, share * 100).toFixed(1)}%" class="${share > 1 ? 'over' : ''}"></span></div>`;
+        html += `<p class="be-detail">${fill(esc(t('beCapacity')), { p: `<strong>${pct(share, 0)}</strong>`, c: tk(state.capacity) })}</p>`;
+      }
+    }
+    if (c.target) {
+      html += `<p class="be-detail be-target">${c.targetTickets === null
+        ? fill(esc(t('targetNever')), { z: eur(c.target) })
+        : fill(esc(t('targetAnswer')), { z: eur(c.target), n: `<strong>${tk(c.targetTickets)}</strong>` })
+          + (state.capacity > 0 && c.targetTickets > state.capacity ? ` <span class="neg">${esc(t('targetOverCap'))}</span>` : '')}</p>`;
+    }
+
+    // Ticket ladder around the break-even point
+    const pts = new Set([0]);
+    const top = Math.max(state.capacity || 0, c.plan ? c.plan.N : 0, c.be ? Math.ceil(c.be * 1.5) : 0, c.targetTickets || 0, 10);
+    for (let i = 1; i <= 4; i++) pts.add(Math.round(top * i / 4));
+    if (c.be) { pts.add(Math.max(0, c.be - 1)); pts.add(c.be); }
+    if (c.plan) pts.add(c.plan.N);
+    if (state.capacity > 0) pts.add(Math.floor(state.capacity));
+    if (c.targetTickets) pts.add(c.targetTickets);
+    const rows = [...pts].sort((a, b) => a - b).map(n => {
+      const r = c.result(n);
+      const tags = [];
+      if (c.be && n === c.be && c.F > 0) tags.push(`<span class="tag tag-be">${esc(t('lgBe'))}</span>`);
+      if (c.plan && n === c.plan.N) tags.push(`<span class="tag">${esc(t('chartPlan'))}</span>`);
+      if (state.capacity > 0 && n === Math.floor(state.capacity)) tags.push(`<span class="tag">${esc(t('chartCap'))}</span>`);
+      if (c.targetTickets && n === c.targetTickets) tags.push(`<span class="tag">${esc(t('tagTarget'))}</span>`);
+      return `<tr class="${c.be && n === c.be && c.F > 0 ? 'is-be' : ''}"><td>${int(n)} ${tags.join(' ')}</td><td>${eur0(n * c.P)}</td><td>${eur0(c.contribution(n))}</td><td>${eur0(c.F)}</td><td class="${r < -0.004 ? 'neg' : 'pos'}">${eur0(r)}</td></tr>`;
+    }).join('');
+    html += `<div class="table-wrap"><table class="ladder"><thead><tr><th>${esc(t('cTickets'))}</th><th>${esc(t('cRevenue'))}</th><th>${esc(t('lgRev'))}</th><th>${esc(t('lgFix'))}</th><th>${esc(t('cResult'))}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.beBox.innerHTML = html;
   }
 
   function renderScheme(c, hasPrice) {
@@ -736,6 +821,7 @@
   el.price.addEventListener('input', () => { state.price = numVal(el.price); update(); });
   el.planned.addEventListener('input', () => { state.planned = numVal(el.planned); update(); });
   el.capacity.addEventListener('input', () => { state.capacity = numVal(el.capacity); update(); });
+  el.target.addEventListener('input', () => { state.target = numVal(el.target); update(); });
 
   el.vatGroup.addEventListener('click', e => {
     const b = e.target.closest('button[data-vat]');
@@ -845,6 +931,7 @@
   function syncInputs() {
     el.price.value = state.price ?? '';
     el.planned.value = state.planned ?? '';
+    el.target.value = state.target ?? '';
     el.capacity.value = state.capacity ?? '';
   }
 

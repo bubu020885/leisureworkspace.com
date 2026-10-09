@@ -241,6 +241,7 @@ body {
 .field:last-child { margin-bottom: 0; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field-row .field { margin-bottom: 0; }
+.field-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 label, .label { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
 .hint { font-size: 0.8rem; color: var(--muted); margin-bottom: 10px; }
 .field .hint { margin: 2px 0 0; }
@@ -369,6 +370,26 @@ input:focus, select:focus, button:focus-visible {
   border-radius: 8px; padding: 12px 14px; font-size: 0.86rem; font-weight: 600;
 }
 
+/* ─── Break-even answer ─────────────────────────────── */
+.card-be { border-color: var(--yellow); border-width: 2px; }
+.be-answer { font-size: 1.12rem; line-height: 1.4; margin-bottom: 6px; text-wrap: balance; }
+.be-answer strong { background: var(--yellow); padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+.be-detail { font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; }
+.be-detail strong { color: var(--text); }
+.be-target { color: var(--text); }
+.be-meter { height: 8px; background: var(--ivory); border-radius: 999px; overflow: hidden; margin: 10px 0 6px; }
+.be-meter span { display: block; height: 100%; background: var(--teal); border-radius: 999px; }
+.be-meter span.over { background: var(--neg); }
+.pos { color: var(--pos); }
+.ladder { margin-top: 10px; }
+.ladder th, .ladder td { padding: 7px 6px; font-size: 0.84rem; text-align: right; border-bottom: 1px solid var(--ivory); white-space: nowrap; }
+.ladder th:first-child, .ladder td:first-child { text-align: left; }
+.ladder th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.ladder tr.is-be td { background: #FFF4CC; font-weight: 800; }
+.ladder td.pos { font-weight: 700; }
+.tag { display: inline-block; font-size: 0.66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; background: var(--ivory); color: var(--muted); border-radius: 4px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+.tag-be { background: var(--yellow); color: var(--navy); }
+
 /* ─── Tables ────────────────────────────────────────── */
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .scheme td { padding: 7px 0; font-size: 0.9rem; border-bottom: 1px solid var(--ivory); }
@@ -418,7 +439,7 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 
 @media (max-width: 520px) {
   .kpis { grid-template-columns: 1fr; }
-  .field-row { grid-template-columns: 1fr; }
+  .field-row, .field-row-3 { grid-template-columns: 1fr; }
   .card { padding: 16px; }
 }
 
