@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ticketrechner</title>
+  <meta name="description" content="Ticketrechner: Rohertrag pro Ticket und Break-even aus Ticketpreis, Umsatzsteuer, variablen und fixen Kosten berechnen." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ===== Top Navigation ===== -->
+  <nav class="top-nav" id="topNav">
+    <div class="nav-inner">
+      <a href="https://leisureworkspace.com" class="nav-brand">
+        <svg class="nav-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Leisure Workspace"><rect x="9" y="9" width="46" height="51" rx="8" fill="#172B3A"/><rect x="15" y="16" width="34" height="37" rx="3" fill="#F5F6F0"/><rect x="22" y="5" width="20" height="15" rx="5" fill="#087E83"/><rect x="27" y="9" width="10" height="3" rx="1.5" fill="#BDE3D1"/><path d="M22 29h20M22 36h14M22 43h11" stroke="#172B3A" stroke-width="2.5" stroke-linecap="round"/><circle cx="42" cy="43" r="6" fill="#FFCA19"/><path d="m39.5 43 1.7 1.7 3.4-3.7" fill="none" stroke="#172B3A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="nav-brand-text">
+          <span class="nav-brand-name"><strong>Leisure</strong>Workspace</span>
+          <span class="nav-brand-sub">Amusement Business Support</span>
+        </div>
+      </a>
+      <div class="nav-divider"></div>
+      <span class="nav-tool-title" data-i18n="toolTitle">Ticketrechner</span>
+      <div class="nav-spacer"></div>
+      <div class="nav-actions">
+        <div class="nav-lang-toggle" id="langToggle" title="Sprache / Language">
+          <span class="nav-lang-opt" data-lang="de">DE</span>
+          <span class="nav-lang-sep">/</span>
+          <span class="nav-lang-opt" data-lang="en">EN</span>
+        </div>
+        <a href="https://leisureworkspace.com" class="nav-home-btn" data-i18n="allTools">Alle Tools &#8599;</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <p class="eyebrow" data-i18n="eyebrow">Zahlen verständlich machen</p>
+    <h1 data-i18n="title">Ticketrechner</h1>
+    <p class="lead" data-i18n="lead">Vom Ticketpreis zum Rohertrag: Umsatzsteuer herausrechnen, variable Kosten abziehen und sehen, ab wie vielen verkauften Tickets sich ein Angebot lohnt.</p>
+  </header>
+
+  <main class="layout">
+    <!-- ================= INPUTS ================= -->
+    <section class="col col-input" aria-labelledby="inputHeading">
+      <h2 id="inputHeading" class="visually-hidden" data-i18n="inputs">Eingaben</h2>
+
+      <div class="card">
+        <div class="card-head"><span class="step">1</span><h3 data-i18n="priceHead">Ticketpreis &amp; Umsatzsteuer</h3></div>
+        <div class="field">
+          <label for="price" data-i18n="priceLabel">Ticketpreis (brutto, inkl. USt)</label>
+          <div class="input-unit"><input type="number" id="price" min="0" step="0.01" inputmode="decimal" /><span>€</span></div>
+        </div>
+        <div class="field">
+          <span class="label" id="vatLabel" data-i18n="vatLabel">Umsatzsteuersatz</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="vatLabel" id="vatGroup">
+            <button type="button" role="radio" data-vat="19">19 %</button>
+            <button type="button" role="radio" data-vat="7">7 %</button>
+            <button type="button" role="radio" data-vat="0">0 %</button>
+          </div>
+          <p class="hint" data-i18n="vatHint">19 % Regelsatz · 7 % z. B. Museen, Zoos, Theater, Konzerte, Personennahverkehr · 0 % steuerfreie Leistungen (z. B. § 4 Nr. 20 UStG).</p>
+        </div>
+        <div class="field">
+          <span class="label" id="modeLabel" data-i18n="modeLabel">Besteuerungsart</span>
+          <div class="segmented segmented-wide" role="radiogroup" aria-labelledby="modeLabel" id="modeGroup">
+            <button type="button" role="radio" data-mode="standard" data-i18n="modeStandard">Regelbesteuerung</button>
+            <button type="button" role="radio" data-mode="margin" data-i18n="modeMargin">Reiseleistung (§ 25 UStG)</button>
+          </div>
+          <p class="hint" id="modeHint"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="step">2</span><h3 data-i18n="varHead">Variable Kosten pro Ticket</h3></div>
+        <p class="hint" data-i18n="varHint">Kosten, die mit jedem verkauften Ticket anfallen – als Betrag in € oder als % vom Bruttopreis (z. B. Provisionen, Zahlungsgebühren).</p>
+        <div class="cost-list" id="varList"></div>
+        <div class="chips" id="varChips"></div>
+        <button type="button" class="btn-add" id="addVar" data-i18n="addVar">+ Variable Kosten hinzufügen</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="step">3</span><h3 data-i18n="fixHead">Fixe Kosten</h3></div>
+        <p class="hint" data-i18n="fixHint">Kosten, die unabhängig von der Ticketanzahl anfallen – pro Veranstaltung, Reise oder Saison (z. B. Bus, Guide, Marketing).</p>
+        <div class="cost-list" id="fixList"></div>
+        <div class="chips" id="fixChips"></div>
+        <button type="button" class="btn-add" id="addFix" data-i18n="addFix">+ Fixe Kosten hinzufügen</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="step">4</span><h3 data-i18n="planHead">Planung (optional)</h3></div>
+        <div class="field-row">
+          <div class="field">
+            <label for="planned" data-i18n="plannedLabel">Geplante Tickets</label>
+            <input type="number" id="planned" min="0" step="1" inputmode="numeric" />
+          </div>
+          <div class="field">
+            <label for="capacity" data-i18n="capacityLabel">Kapazität (max. Tickets)</label>
+            <input type="number" id="capacity" min="0" step="1" inputmode="numeric" />
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" id="saveBtn" data-i18n="save">Speichern</button>
+        <button type="button" class="btn btn-ghost" id="loadBtn" data-i18n="load">Laden</button>
+        <button type="button" class="btn btn-ghost" id="printBtn" data-i18n="print">Drucken / PDF</button>
+        <button type="button" class="btn btn-ghost" id="resetBtn" data-i18n="reset">Zurücksetzen</button>
+        <input type="file" id="loadFile" accept="application/json,.json" hidden />
+      </div>
+    </section>
+
+    <!-- ================= RESULTS ================= -->
+    <section class="col col-result" aria-labelledby="resultHeading" aria-live="polite">
+      <h2 id="resultHeading" class="visually-hidden" data-i18n="results">Ergebnis</h2>
+
+      <div class="kpis">
+        <div class="kpi kpi-main">
+          <span class="kpi-label" data-i18n="kpiDb">Rohertrag pro Ticket</span>
+          <strong class="kpi-value" id="kpiDb">–</strong>
+          <span class="kpi-sub" id="kpiDbSub"></span>
+        </div>
+        <div class="kpi kpi-be">
+          <span class="kpi-label" data-i18n="kpiBe">Break-even ab</span>
+          <strong class="kpi-value" id="kpiBe">–</strong>
+          <span class="kpi-sub" id="kpiBeSub"></span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label" data-i18n="kpiNet">Nettoerlös pro Ticket</span>
+          <strong class="kpi-value kpi-value-sm" id="kpiNet">–</strong>
+          <span class="kpi-sub" id="kpiNetSub"></span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label" id="kpiPlanLabel" data-i18n="kpiPlan">Ergebnis bei Planmenge</span>
+          <strong class="kpi-value kpi-value-sm" id="kpiPlan">–</strong>
+          <span class="kpi-sub" id="kpiPlanSub"></span>
+        </div>
+      </div>
+
+      <div class="alert" id="alert" hidden></div>
+
+      <div class="card">
+        <h3 data-i18n="schemeHead">Kalkulationsschema pro Ticket</h3>
+        <table class="scheme" id="scheme"></table>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="chartHead">Ergebnis nach verkauften Tickets</h3>
+        <div class="chart" id="chart"></div>
+        <div class="legend">
+          <span><i class="sw sw-rev"></i><span data-i18n="lgRev">Rohertrag gesamt</span></span>
+          <span><i class="sw sw-fix"></i><span data-i18n="lgFix">Fixkosten</span></span>
+          <span><i class="sw sw-be"></i><span data-i18n="lgBe">Break-even</span></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="cmpHead">Vergleich der Steuersätze</h3>
+        <p class="hint" data-i18n="cmpHint">Gleicher Bruttopreis, gleiche Kosten – nur der Umsatzsteuersatz ändert sich.</p>
+        <div class="table-wrap"><table class="cmp" id="cmp"></table></div>
+      </div>
+
+      <details class="card method">
+        <summary data-i18n="methodHead">Methodik: So wird gerechnet</summary>
+        <div id="methodBody"></div>
+      </details>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p><strong data-i18n="toolTitle">Ticketrechner</strong> — leisureworkspace.com</p>
+    <p class="footer-note" data-i18n="footerNote">Alle Eingaben bleiben lokal in deinem Browser. Keine steuerliche Beratung – Steuersätze und Anwendbarkeit von § 25 UStG im Einzelfall prüfen.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
