@@ -24,6 +24,12 @@
       <span class="nav-tool-title" data-i18n="toolTitle">Ticketrechner</span>
       <div class="nav-spacer"></div>
       <div class="nav-actions">
+        <div class="nav-tools" role="group" aria-label="Datei">
+          <button type="button" class="nav-btn" id="importBtn" data-i18n-title="importTitle" title="Eingaben aus Datei laden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg><span data-i18n="import">Import</span></button>
+          <button type="button" class="nav-btn" id="exportBtn" data-i18n-title="exportTitle" title="Eingaben als Datei speichern"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span data-i18n="export">Export</span></button>
+          <button type="button" class="nav-btn nav-btn-pdf" id="pdfBtn" data-i18n-title="pdfTitle" title="Kalkulation als PDF (A4) speichern"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span>PDF</span></button>
+          <input type="file" id="loadFile" accept="application/json,.json" hidden />
+        </div>
         <div class="nav-lang-toggle" id="langToggle" title="Sprache / Language">
           <span class="nav-lang-opt" data-lang="de">DE</span>
           <span class="nav-lang-sep">/</span>
@@ -45,7 +51,7 @@
     <section class="col col-input" aria-labelledby="inputHeading">
       <h2 id="inputHeading" class="visually-hidden" data-i18n="inputs">Eingaben</h2>
 
-      <div class="card">
+      <div class="card step-card s1">
         <div class="card-head"><span class="step">1</span><h3 data-i18n="priceHead">Ticketpreis &amp; Umsatzsteuer</h3></div>
         <div class="field">
           <label for="price" data-i18n="priceLabel">Ticketpreis (brutto, inkl. USt)</label>
@@ -70,7 +76,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card step-card s2">
         <div class="card-head"><span class="step">2</span><h3 data-i18n="varHead">Variable Kosten pro Ticket</h3></div>
         <p class="hint" data-i18n="varHint">Kosten, die mit jedem verkauften Ticket anfallen – als Betrag in € oder als % vom Bruttopreis (z. B. Provisionen, Zahlungsgebühren).</p>
         <div class="cost-list" id="varList"></div>
@@ -78,7 +84,7 @@
         <button type="button" class="btn-add" id="addVar" data-i18n="addVar">+ Variable Kosten hinzufügen</button>
       </div>
 
-      <div class="card">
+      <div class="card step-card s3">
         <div class="card-head"><span class="step">3</span><h3 data-i18n="fixHead">Fixe Kosten</h3></div>
         <p class="hint" data-i18n="fixHint">Kosten, die unabhängig von der Ticketanzahl anfallen – pro Veranstaltung, Reise oder Saison (z. B. Bus, Guide, Marketing).</p>
         <div class="cost-list" id="fixList"></div>
@@ -86,7 +92,7 @@
         <button type="button" class="btn-add" id="addFix" data-i18n="addFix">+ Fixe Kosten hinzufügen</button>
       </div>
 
-      <div class="card">
+      <div class="card step-card s4">
         <div class="card-head"><span class="step">4</span><h3 data-i18n="planHead">Planung (optional)</h3></div>
         <div class="field-row field-row-3">
           <div class="field">
@@ -105,11 +111,7 @@
       </div>
 
       <div class="actions">
-        <button type="button" class="btn btn-ghost" id="saveBtn" data-i18n="save">Speichern</button>
-        <button type="button" class="btn btn-ghost" id="loadBtn" data-i18n="load">Laden</button>
-        <button type="button" class="btn btn-ghost" id="printBtn" data-i18n="print">Drucken / PDF</button>
         <button type="button" class="btn btn-ghost" id="resetBtn" data-i18n="reset">Zurücksetzen</button>
-        <input type="file" id="loadFile" accept="application/json,.json" hidden />
       </div>
     </section>
 
@@ -180,6 +182,7 @@
     <p class="footer-note" data-i18n="footerNote">Alle Eingaben bleiben lokal in deinem Browser. Keine steuerliche Beratung – Steuersätze und Anwendbarkeit von § 25 UStG im Einzelfall prüfen.</p>
   </footer>
 
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script src="app.js"></script>
 </body>
 </html>

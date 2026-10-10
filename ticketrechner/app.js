@@ -39,12 +39,25 @@
       planHead: 'Planung (optional)',
       plannedLabel: 'Geplante Tickets',
       capacityLabel: 'Kapazität (max. Tickets)',
+      import: 'Import',
+      export: 'Export',
+      importTitle: 'Eingaben aus einer Datei laden (.json)',
+      exportTitle: 'Eingaben als Datei speichern (.json)',
+      pdfTitle: 'Kalkulation als PDF speichern (1 Seite A4)',
+      exported: 'Eingaben exportiert.',
+      imported: '„{f}“ importiert.',
+      pdfDone: 'PDF erstellt.',
+      pdfError: 'Das PDF konnte nicht erstellt werden. Bitte Internetverbindung prüfen.',
+      pdfCreated: 'erstellt am',
+      pdfInputs: 'Eingaben',
+      pdfBase: 'Preis, Steuer & Planung',
+      pdfFooter: 'Vereinfachte Kalkulation ohne Gewähr. Keine Steuerberatung – Steuersätze und § 25 UStG im Einzelfall prüfen.',
       save: 'Speichern',
       load: 'Laden',
       print: 'Drucken / PDF',
       reset: 'Zurücksetzen',
       resetConfirm: 'Alle Eingaben zurücksetzen und mit leeren Feldern starten?',
-      loadError: 'Die Datei konnte nicht gelesen werden.',
+      loadError: 'Die Datei konnte nicht gelesen werden. Bitte eine mit dem Ticketrechner exportierte .json-Datei wählen.',
       kpiDb: 'Rohertrag pro Ticket',
       beHead: 'Ab wann lohnt es sich?',
       beEmpty: 'Gib einen Ticketpreis ein, um den Break-even zu sehen.',
@@ -201,12 +214,25 @@
       planHead: 'Planning (optional)',
       plannedLabel: 'Planned tickets',
       capacityLabel: 'Capacity (max. tickets)',
+      import: 'Import',
+      export: 'Export',
+      importTitle: 'Load inputs from a file (.json)',
+      exportTitle: 'Save inputs as a file (.json)',
+      pdfTitle: 'Save calculation as PDF (1 page A4)',
+      exported: 'Inputs exported.',
+      imported: '“{f}” imported.',
+      pdfDone: 'PDF created.',
+      pdfError: 'The PDF could not be created. Please check your internet connection.',
+      pdfCreated: 'created',
+      pdfInputs: 'Inputs',
+      pdfBase: 'Price, VAT & planning',
+      pdfFooter: 'Simplified calculation without warranty. Not tax advice – check VAT rates and Sec. 25 UStG for your case.',
       save: 'Save',
       load: 'Open',
       print: 'Print / PDF',
       reset: 'Reset',
       resetConfirm: 'Reset all inputs and start with empty fields?',
-      loadError: 'The file could not be read.',
+      loadError: 'The file could not be read. Please choose a .json file exported from the Ticket Calculator.',
       kpiDb: 'Gross profit per ticket',
       beHead: 'When does it pay off?',
       beEmpty: 'Enter a ticket price to see the break-even point.',
@@ -496,6 +522,7 @@
   const locale = () => (lang === 'de' ? 'de-DE' : 'en-GB');
   function eur(v) {
     if (v === null || !isFinite(v)) return '–';
+    if (Math.abs(v) < 0.005) v = 0;
     return new Intl.NumberFormat(locale(), { style: 'currency', currency: 'EUR' }).format(v);
   }
   function eur0(v) {
@@ -529,6 +556,7 @@
     document.documentElement.lang = lang;
     document.title = t('toolTitle') + ' · Leisure Workspace';
     document.querySelectorAll('[data-i18n]').forEach(n => { n.textContent = t(n.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-title]').forEach(n => { n.title = t(n.dataset.i18nTitle); n.setAttribute('aria-label', n.title); });
     document.querySelectorAll('.nav-lang-opt').forEach(n => n.classList.toggle('active', n.dataset.lang === lang));
     el.methodBody.innerHTML = t('method');
     renderChips();
@@ -682,48 +710,56 @@
     el.beBox.innerHTML = html;
   }
 
-  function renderScheme(c, hasPrice) {
+  // Calculation rows as data; `sec` links each row to its input step (s1–s4).
+  function schemeRows(c, hasPrice) {
     const share = v => (c.P > 0 ? pct(v / c.P) : '');
     const rows = [];
-    const row = (label, value, extra = '', klass = '') =>
-      rows.push(`<tr class="${klass}"><td>${esc(label)}</td><td class="${typeof value === 'number' ? cls(value) : ''}">${typeof value === 'number' ? eur(value) : esc(value)}</td><td>${extra}</td></tr>`);
+    const row = (label, value, extra, kind, sec) => rows.push({ label, value, extra: extra || '', kind: kind || '', sec: sec || '' });
 
-    row(t('sPrice'), c.P, hasPrice ? share(c.P) : '', 'strong');
+    row(t('sPrice'), c.P, hasPrice ? share(c.P) : '', 'strong', 's1');
     if (c.margin) {
-      row(t('sRvl'), c.rvlVar, share(c.rvlVar), 'sub');
-      row(t('sMargin'), c.marginGross, share(c.marginGross), 'sub');
+      row(t('sRvl'), c.rvlVar, share(c.rvlVar), 'sub', 's1');
+      row(t('sMargin'), c.marginGross, share(c.marginGross), 'sub', 's1');
     }
-    row(fill(c.margin ? t('sVatMargin') : t('sVatStd'), { r: c.rate }), -c.vat, share(c.vat));
-    row(t('sNet'), c.net, share(c.net), 'strong');
+    row(fill(c.margin ? t('sVatMargin') : t('sVatStd'), { r: c.rate }), -c.vat, share(c.vat), '', 's1');
+    row(t('sNet'), c.net, share(c.net), 'strong', 's1');
     if (c.varRows.length) {
-      row(t('sVar'), -c.V, share(c.V));
-      c.varRows.forEach(r => {
+      row(t('sVar'), -c.V, share(c.V), '', 's2');
+      c.varRows.filter(r => r.name || r.cost).forEach(r => {
         const label = (r.name || '–') + (r.unit === 'pct' ? ` (${new Intl.NumberFormat(locale()).format(r.amount)} %)` : '') + (r.rvl ? ` · ${t('rvl')}` : '');
-        row(label, -r.cost, '', 'sub');
+        row(label, -r.cost, '', 'sub', 's2');
       });
     } else {
-      row(t('sVarNone'), 0, '');
+      row(t('sVarNone'), 0, '', '', 's2');
     }
     row(t('sDb'), c.db, share(c.db), 'hl');
 
-    rows.push(`<tr class="sep"><td colspan="3">${esc(t('sFixSep'))}</td></tr>`);
-    row(t('sFix'), c.F);
+    row(t('sFixSep'), null, '', 'sep');
+    row(t('sFix'), c.F, '', '', 's3');
     if (c.relief > 0) {
-      row(t('sFixRelief'), -c.relief, '', 'sub');
-      row(t('sFixEff'), c.Feff, '', 'strong');
+      row(t('sFixRelief'), -c.relief, '', 'sub', 's3');
+      row(t('sFixEff'), c.Feff, '', 'strong', 's3');
     }
     const beText = !hasPrice ? '–' : c.be === null ? t('never') : `${int(c.be)} ${c.be === 1 ? t('ticket') : t('tickets')}`;
     row(t('sBe'), beText, '', 'total');
     if (hasPrice && c.be !== null && c.F > 0) row(t('sBeRev'), c.be * c.P, '', 'sub');
 
     if (c.plan && hasPrice) {
-      rows.push(`<tr class="sep"><td colspan="3">${esc(fill(t('sPlanSep'), { n: int(c.plan.N) }))}</td></tr>`);
-      row(t('sFixPer'), -c.plan.fixPer);
-      row(t('sFull'), c.plan.fullPer, '', 'strong');
+      row(fill(t('sPlanSep'), { n: int(c.plan.N) }), null, '', 'sep');
+      row(t('sFixPer'), -c.plan.fixPer, '', '', 's4');
+      row(t('sFull'), c.plan.fullPer, '', 'strong', 's4');
       row(t('sTotal'), c.plan.total, '', 'hl');
-      row(t('sMinPrice'), c.plan.minPrice === null ? t('sUnreachable') : c.plan.minPrice);
+      row(t('sMinPrice'), c.plan.minPrice === null ? t('sUnreachable') : c.plan.minPrice, '', '', 's4');
     }
-    el.scheme.innerHTML = rows.join('');
+    return rows;
+  }
+  const fmtVal = v => (typeof v === 'number' ? eur(v) : v);
+
+  function renderScheme(c, hasPrice) {
+    el.scheme.innerHTML = schemeRows(c, hasPrice).map(r => r.kind === 'sep'
+      ? `<tr class="sep"><td colspan="3">${esc(r.label)}</td></tr>`
+      : `<tr class="${r.kind} ${r.sec}"><td>${esc(r.label)}</td><td class="${typeof r.value === 'number' ? cls(r.value) : ''}">${esc(fmtVal(r.value))}</td><td>${r.extra}</td></tr>`
+    ).join('');
   }
 
   function renderCompare(hasPrice) {
@@ -773,12 +809,13 @@
     const area = `M${x(0)} ${fixY} ` + pts.map(p => `L${x(p[0]).toFixed(1)} ${Math.min(y(p[1]), fixY).toFixed(1)}`).join(' ') + ` L${x(xMax)} ${fixY} Z`;
 
     let marks = '';
-    const vline = (n, label, color, dash) => {
+    const vline = (n, label, color, dash, left) => {
       if (!(n > 0) || n > xMax) return '';
-      return `<line x1="${x(n)}" x2="${x(n)}" y1="${T}" y2="${T + ih}" stroke="${color}" stroke-width="1.5" ${dash ? 'stroke-dasharray="4 4"' : ''}/><text x="${x(n) + (x(n) > W - R - 70 ? -4 : 4)}" y="${T + 11}" text-anchor="${x(n) > W - R - 70 ? 'end' : 'start'}" style="fill:${color};font-weight:700">${esc(label)}</text>`;
+      const flip = left || x(n) > W - R - 70;
+      return `<line x1="${x(n)}" x2="${x(n)}" y1="${T}" y2="${T + ih}" stroke="${color}" stroke-width="1.5" ${dash ? 'stroke-dasharray="4 4"' : ''}/><text x="${x(n) + (flip ? -4 : 4)}" y="${T + 11}" text-anchor="${flip ? 'end' : 'start'}" style="fill:${color};font-weight:700">${esc(label)}</text>`;
     };
     marks += vline(cap, t('chartCap'), '#58686C', true);
-    if (plan && plan !== cap) marks += vline(plan, t('chartPlan'), '#087E83', true);
+    if (plan && plan !== cap) marks += vline(plan, t('chartPlan'), '#087E83', true, cap > plan && x(cap) - x(plan) < 70);
     let beDot = '';
     if (beX > 0 && beX <= xMax) {
       beDot = `<circle cx="${x(beX)}" cy="${y(c.contribution(beX))}" r="6.5" fill="#FFCA19" stroke="#172B3A" stroke-width="2"/>`
@@ -893,16 +930,38 @@
     lang = n.dataset.lang; safeSet(LANG_KEY, lang); applyLang();
   }));
 
-  // Save / load / print / reset
-  $('saveBtn').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(serialize(), null, 2)], { type: 'application/json' });
+  // Toast instead of alert(): works in every embedding.
+  let toastTimer;
+  function toast(msg, isErr) {
+    const n = $('toast');
+    n.textContent = msg; n.classList.toggle('err', !!isErr); n.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { n.hidden = true; }, 3200);
+  }
+
+  function stamp() { return new Date().toISOString().slice(0, 10); }
+  // Inside the claude.ai preview, files go through the viewer's download prompt;
+  // on the website a plain download link is used. Resolves false if not saved.
+  async function saveBlob(blob, filename) {
+    if (window.claude && typeof window.claude.use === 'function') {
+      const dl = await window.claude.use('downloads').catch(() => null);
+      if (dl) {
+        try { await dl.save({ filename, data: blob }); return true; } catch (e) { return false; }
+      }
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `ticketrechner-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    return true;
+  }
+
+  // Import / export of the input data (JSON)
+  $('exportBtn').addEventListener('click', async () => {
+    const ok = await saveBlob(new Blob([JSON.stringify(serialize(), null, 2)], { type: 'application/json' }), `ticketrechner-${stamp()}.json`);
+    if (ok) toast(t('exported'));
   });
-  $('loadBtn').addEventListener('click', () => $('loadFile').click());
+  $('importBtn').addEventListener('click', () => $('loadFile').click());
   $('loadFile').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -913,14 +972,222 @@
         state.vars.forEach(r => { r.id = uid++; });
         state.fixes.forEach(r => { r.id = uid++; });
         syncInputs(); renderRows(); update();
-      } catch (err) { alert(t('loadError')); }
+        toast(fill(t('imported'), { f: file.name }));
+      } catch (err) { toast(t('loadError'), true); }
       e.target.value = '';
     };
     reader.readAsText(file);
   });
-  $('printBtn').addEventListener('click', () => {
-    window.print();
+
+  // ─── PDF export (one A4 page) ─────────────────────────
+  const PDF_LIBS = [
+    ['https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js'],
+    ['https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js']
+  ];
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const sc = document.createElement('script');
+      sc.src = src; sc.onload = resolve; sc.onerror = () => { sc.remove(); reject(new Error(src)); };
+      document.head.appendChild(sc);
+    });
+  }
+  async function ensurePdfLibs() {
+    if (!(window.jspdf && window.jspdf.jsPDF)) {
+      let ok = false;
+      for (const u of PDF_LIBS[0]) { try { await loadScript(u); ok = true; break; } catch (e) { /* next */ } }
+      if (!ok) throw new Error('jspdf');
+    }
+    if (!window.jspdf.jsPDF.API.autoTable) {
+      let ok = false;
+      for (const u of PDF_LIBS[1]) { try { await loadScript(u); ok = true; break; } catch (e) { /* next */ } }
+      if (!ok) throw new Error('autotable');
+    }
+    return window.jspdf.jsPDF;
+  }
+
+  // Standard PDF fonts only cover WinAnsi – map the few symbols outside it.
+  const pdfText = v => String(v ?? '')
+    .replace(/−/g, '-').replace(/÷/g, ':').replace(/≤/g, '<=').replace(/ /g, ' ').replace(/[↗→]/g, '');
+  const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const PDFC = {
+    navy: hex('#172B3A'), teal: hex('#087E83'), yellow: hex('#FFCA19'), mint: hex('#BDE3D1'),
+    ivory: hex('#F5F6F0'), muted: hex('#58686C'), line: hex('#DDE4DF'), neg: hex('#B42318'), white: [255, 255, 255],
+    s1: hex('#E8F0F4'), s2: hex('#E4F3EC'), s3: hex('#FFF5D3'), s4: hex('#F1EEE6'),
+    b1: hex('#172B3A'), b2: hex('#087E83'), b3: hex('#FFCA19'), b4: hex('#58686C')
+  };
+
+  function buildPdf(JsPDF, scale) {
+    const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const W = 210, H = 297, M = 13, CW = W - 2 * M;
+    const fs = n => n * scale;
+    const c = calculate(state);
+    const hasPrice = state.price !== null && state.price > 0;
+    const dateStr = new Date().toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Header band
+    doc.setFillColor(...PDFC.navy); doc.rect(0, 0, W, 20, 'F');
+    doc.setFillColor(...PDFC.yellow); doc.rect(0, 20, W, 1.2, 'F');
+    doc.setTextColor(...PDFC.white);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(pdfText(t('toolTitle')), M, 12.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.text(pdfText(`Leisure Workspace · ${t('pdfCreated')} ${dateStr}`), W - M, 12.5, { align: 'right' });
+    let y = 28;
+
+    // KPI boxes
+    const kpis = [
+      { label: t('kpiDb'), value: hasPrice ? eur(c.db) : '–', sub: hasPrice && c.net > 0 ? `${pct(c.db / c.net)} ${t('ofNet')}` : '', fill: PDFC.navy, ink: PDFC.white },
+      { label: t('kpiBe'), value: !hasPrice ? '–' : c.be === null ? t('never') : `${int(Math.max(c.be, c.F > 0 ? c.be : 1))} ${t('tickets')}`, sub: hasPrice && c.be && c.F > 0 ? `${t('beRevenue')}: ${eur0(c.be * c.P)}` : '', fill: PDFC.yellow, ink: PDFC.navy },
+      { label: t('kpiNet'), value: hasPrice ? eur(c.net) : '–', sub: hasPrice ? `${t('vatPerTicket')}: ${eur(c.vat)}` : '', fill: PDFC.ivory, ink: PDFC.navy },
+      { label: t('kpiPlan'), value: c.plan && hasPrice ? eur(c.plan.total) : '–', sub: c.plan ? `${int(c.plan.N)} ${t('tickets')}` : t('planMissing'), fill: PDFC.ivory, ink: PDFC.navy, neg: c.plan && c.plan.total < 0 }
+    ];
+    const gap = 3, kw = (CW - 3 * gap) / 4, ks = Math.max(scale, 0.85), kh = 19 * ks;
+    kpis.forEach((k, i) => {
+      const x = M + i * (kw + gap);
+      doc.setFillColor(...k.fill); doc.roundedRect(x, y, kw, kh, 2, 2, 'F');
+      doc.setTextColor(...k.ink);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5 * ks);
+      doc.text(pdfText(k.label.toUpperCase()), x + 3, y + 5 * ks);
+      doc.setFontSize(13 * ks);
+      if (k.neg) doc.setTextColor(...PDFC.neg);
+      doc.text(pdfText(k.value), x + 3, y + 11 * ks);
+      doc.setTextColor(...k.ink);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8 * ks);
+      doc.text(pdfText(k.sub), x + 3, y + kh - 2.5 * ks, { maxWidth: kw - 5 });
+    });
+    y += kh + 5;
+
+    // Break-even sentence
+    doc.setTextColor(...PDFC.navy); doc.setFont('helvetica', 'bold'); doc.setFontSize(fs(10));
+    let beLine;
+    if (!hasPrice) beLine = t('beEmpty');
+    else if (c.be === null) beLine = t('beNever');
+    else if (c.F <= 0) beLine = t('beFromFirst');
+    else beLine = fill(t('beAnswer'), { n: `${int(c.be)} ${c.be === 1 ? t('ticket') : t('tickets')}` });
+    const beLines = doc.splitTextToSize(pdfText(beLine), CW);
+    doc.text(beLines, M, y); y += beLines.length * fs(4.4);
+    if (hasPrice && c.be && c.F > 0) {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(fs(8.2)); doc.setTextColor(...PDFC.muted);
+      const tk = n => `${int(n)} ${n === 1 ? t('ticket') : t('tickets')}`;
+      let d = fill(t('beDetail'), { a: tk(c.be - 1), l: eur(Math.abs(c.result(c.be - 1))), b: tk(c.be), g: eur(c.result(c.be)), d: eur(c.db) });
+      if (state.capacity > 0) d += ' ' + fill(t('beCapacity'), { p: pct(c.be / state.capacity, 0), c: tk(state.capacity) });
+      if (c.target) d += ' ' + (c.targetTickets === null ? fill(t('targetNever'), { z: eur(c.target) }) : fill(t('targetAnswer'), { z: eur(c.target), n: tk(c.targetTickets) }));
+      const dl = doc.splitTextToSize(pdfText(d), CW);
+      doc.text(dl, M, y + 0.5); y += dl.length * fs(3.6) + 1;
+    }
+    y += 2;
+
+    // Section heading helper
+    const heading = (txt, yy) => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(fs(9.5)); doc.setTextColor(...PDFC.teal);
+      doc.text(pdfText(txt.toUpperCase()), M, yy);
+      doc.setDrawColor(...PDFC.line); doc.setLineWidth(0.3); doc.line(M, yy + 1.6, W - M, yy + 1.6);
+      return yy + 4;
+    };
+
+    // Calculation table
+    y = heading(t('schemeHead'), y);
+    const rows = schemeRows(c, hasPrice);
+    doc.autoTable({
+      startY: y, margin: { left: M, right: M }, theme: 'plain',
+      body: rows.map(r => r.kind === 'sep'
+        ? [{ content: pdfText(r.label.toUpperCase()), colSpan: 3 }]
+        : [pdfText(r.label), pdfText(fmtVal(r.value)), pdfText(r.extra)]),
+      styles: { font: 'helvetica', fontSize: fs(8.2), cellPadding: { top: fs(1.05), bottom: fs(1.05), left: 2.2, right: 2.2 }, textColor: PDFC.navy, lineColor: PDFC.white, lineWidth: { bottom: 0.25 } },
+      columnStyles: { 0: { cellWidth: 'auto' }, 1: { halign: 'right', cellWidth: 34 }, 2: { halign: 'right', cellWidth: 17, textColor: PDFC.muted, fontSize: fs(7) } },
+      didParseCell: d => {
+        const r = rows[d.row.index];
+        if (!r) return;
+        if (r.sec) d.cell.styles.fillColor = PDFC[r.sec];
+        if (r.kind === 'strong') d.cell.styles.fontStyle = 'bold';
+        if (r.kind === 'sub' && d.column.index === 0) { d.cell.styles.cellPadding = { ...d.cell.styles.cellPadding, left: 6 }; d.cell.styles.textColor = PDFC.muted; }
+        if (r.kind === 'hl') { d.cell.styles.fillColor = PDFC.navy; d.cell.styles.textColor = PDFC.white; d.cell.styles.fontStyle = 'bold'; }
+        if (r.kind === 'total') { d.cell.styles.fontStyle = 'bold'; d.cell.styles.lineColor = PDFC.navy; d.cell.styles.lineWidth = { top: 0.5 }; }
+        if (r.kind === 'sep') { d.cell.styles.textColor = PDFC.teal; d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = fs(7); d.cell.styles.cellPadding = { top: fs(2.4), bottom: fs(0.8), left: 0, right: 0 }; }
+        if (d.column.index === 1 && typeof r.value === 'number' && r.value < -0.004 && r.kind !== 'hl') d.cell.styles.textColor = PDFC.neg;
+      }
+    });
+    y = doc.lastAutoTable.finalY + 6;
+
+    // Inputs: three tables side by side
+    y = heading(t('pdfInputs'), y);
+    const colGap = 4, colW = (CW - 2 * colGap) / 3;
+    const mode = state.mode === 'margin' ? t('modeMargin') : t('modeStandard');
+    const opt = v => (v === null || v === undefined || v === '' ? '–' : v);
+    const base = [
+      [t('priceLabel'), hasPrice ? eur(state.price) : '–', 's1'],
+      [t('vatLabel'), `${state.vat} %`, 's1'],
+      [t('modeLabel'), mode, 's1'],
+      [t('plannedLabel'), opt(state.planned && int(state.planned)), 's4'],
+      [t('capacityLabel'), opt(state.capacity && int(state.capacity)), 's4'],
+      [t('targetLabel'), opt(state.target && eur(state.target)), 's4']
+    ];
+    const margin = state.mode === 'margin';
+    const varRowsUsed = state.vars.filter(r => r.name || r.amount);
+    const fixRowsUsed = state.fixes.filter(r => r.name || r.amount);
+    const varBody = varRowsUsed.length ? varRowsUsed.map(r => [
+      (r.name || '–') + (margin && r.rvl ? ` (${t('rvl')})` : ''),
+      r.amount === null ? '–' : (r.unit === 'pct' ? `${new Intl.NumberFormat(locale()).format(r.amount)} %` : eur(r.amount))
+    ]) : [[t('emptyVar'), '']];
+    const fixBody = fixRowsUsed.length ? fixRowsUsed.map(r => [
+      (r.name || '–') + (margin && r.rvl ? ` (${t('rvl')})` : ''),
+      r.amount === null ? '–' : eur(r.amount)
+    ]) : [[t('emptyFix'), '']];
+    if (fixRowsUsed.length) fixBody.push([t('sFix'), eur(c.F), 'sum']);
+    if (varRowsUsed.length && hasPrice) varBody.push([t('sVar'), eur(c.V), 'sum']);
+
+    const tableAt = (idx, title, badge, ink, fillC, body, secFor) => {
+      doc.autoTable({
+        startY: y, margin: { left: M + idx * (colW + colGap) }, tableWidth: colW, theme: 'plain',
+        head: [[{ content: pdfText(title), colSpan: 2 }]],
+        body: body.map(r => [pdfText(r[0]), pdfText(r[1])]),
+        styles: { font: 'helvetica', fontSize: fs(7.4), cellPadding: { top: fs(1), bottom: fs(1), left: 2, right: 2 }, textColor: PDFC.navy, lineColor: PDFC.white, lineWidth: { bottom: 0.25 }, overflow: 'linebreak' },
+        headStyles: { fillColor: badge, textColor: ink, fontStyle: 'bold', fontSize: fs(7.6) },
+        columnStyles: { 1: { halign: 'right', cellWidth: colW * 0.38 } },
+        didParseCell: d => {
+          if (d.section !== 'body') return;
+          const r = body[d.row.index];
+          d.cell.styles.fillColor = PDFC[secFor(r)] || fillC;
+          if (r[2] === 'sum') d.cell.styles.fontStyle = 'bold';
+        }
+      });
+      return doc.lastAutoTable.finalY;
+    };
+    const y1 = tableAt(0, `1 + 4 · ${t('pdfBase')}`, PDFC.b1, PDFC.white, PDFC.s1, base, r => r[2]);
+    const y2 = tableAt(1, `2 · ${t('varHead')}`, PDFC.b2, PDFC.white, PDFC.s2, varBody, () => 's2');
+    const y3 = tableAt(2, `3 · ${t('fixHead')}`, PDFC.b3, PDFC.navy, PDFC.s3, fixBody, () => 's3');
+    y = Math.max(y1, y2, y3);
+
+    // Footer
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(...PDFC.muted);
+    doc.setDrawColor(...PDFC.line); doc.line(M, H - 12, W - M, H - 12);
+    doc.text(pdfText(t('pdfFooter')), M, H - 8, { maxWidth: CW - 40 });
+    doc.text('leisureworkspace.com/ticketrechner', W - M, H - 8, { align: 'right' });
+
+    return { doc, fits: doc.getNumberOfPages() === 1 && y <= H - 15 };
+  }
+
+  $('pdfBtn').addEventListener('click', async () => {
+    const btn = $('pdfBtn');
+    if (btn.getAttribute('aria-busy') === 'true') return;
+    btn.setAttribute('aria-busy', 'true');
+    try {
+      const JsPDF = await ensurePdfLibs();
+      let out;
+      for (const sc of [1, 0.92, 0.84, 0.76, 0.68, 0.6, 0.52]) {
+        out = buildPdf(JsPDF, sc);
+        if (out.fits) break;
+      }
+      if (out.doc.getNumberOfPages() > 1) {
+        for (let i = out.doc.getNumberOfPages(); i > 1; i--) out.doc.deletePage(i);
+      }
+      if (await saveBlob(out.doc.output('blob'), `ticketrechner-${stamp()}.pdf`)) toast(t('pdfDone'));
+    } catch (err) {
+      toast(t('pdfError'), true);
+    } finally {
+      btn.removeAttribute('aria-busy');
+    }
   });
+
   $('resetBtn').addEventListener('click', () => {
     if (!confirm(t('resetConfirm'))) return;
     state = emptyState();
