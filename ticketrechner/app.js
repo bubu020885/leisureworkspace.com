@@ -59,6 +59,24 @@
       resetConfirm: 'Alle Eingaben zurücksetzen und mit leeren Feldern starten?',
       loadError: 'Die Datei konnte nicht gelesen werden. Bitte eine mit dem Ticketrechner exportierte .json-Datei wählen.',
       kpiDb: 'Rohertrag pro Ticket',
+      twoPricesLabel: 'Zweite Ticketart vergleichen (Preis B – Reduziert)',
+      priceALabel: 'Preis A – Lead-Preis (brutto, inkl. USt)',
+      priceBLabel: 'Preis B – Reduziert (brutto)',
+      shareBLabel: 'Anteil Preis B am Verkauf',
+      priceBHint: 'Kosten und Steuersatz gelten für beide Ticketarten. Prozentuale Kosten werden auf den jeweiligen Preis berechnet. Der Anteil steuert den Break-even im Mix.',
+      nameA: 'Preis A – Lead',
+      nameB: 'Preis B – Reduziert',
+      mix: 'Mix',
+      mixSub: 'Ø pro Ticket',
+      abHead: 'Vergleich der Ticketarten',
+      abEmpty: 'Gib Preis A und Preis B ein, um beide Ticketarten zu vergleichen.',
+      abDbPct: 'Rohertrag in % vom Nettoerlös',
+      abPlan: 'Ergebnis bei {n} Tickets',
+      beNone: 'ab 1. Ticket',
+      abDiff: 'Ein reduziertes Ticket bringt {d} weniger Rohertrag als ein Lead-Ticket ({p} weniger).',
+      abEquiv: 'Für den Rohertrag eines Lead-Tickets brauchst du {n} reduzierte Tickets.',
+      abBNeg: 'Preis B deckt nicht einmal die variablen Kosten – jedes reduzierte Ticket vergrößert den Verlust.',
+      abMixBe: 'Bei {s} reduzierten Tickets liegt der Break-even bei {n} (davon {x} × A und {y} × B) statt bei {a} nur mit Preis A.',
       beHead: 'Ab wann lohnt es sich?',
       beEmpty: 'Gib einen Ticketpreis ein, um den Break-even zu sehen.',
       beAnswer: 'Du musst mindestens {n} verkaufen, damit sich das Angebot rentiert.',
@@ -234,6 +252,24 @@
       resetConfirm: 'Reset all inputs and start with empty fields?',
       loadError: 'The file could not be read. Please choose a .json file exported from the Ticket Calculator.',
       kpiDb: 'Gross profit per ticket',
+      twoPricesLabel: 'Compare a second ticket type (price B – reduced)',
+      priceALabel: 'Price A – lead price (gross, incl. VAT)',
+      priceBLabel: 'Price B – reduced (gross)',
+      shareBLabel: 'Share of price B in sales',
+      priceBHint: 'Costs and VAT rate apply to both ticket types. Percentage costs are based on each price. The share drives the mixed break-even.',
+      nameA: 'Price A – lead',
+      nameB: 'Price B – reduced',
+      mix: 'Mix',
+      mixSub: 'avg. per ticket',
+      abHead: 'Ticket type comparison',
+      abEmpty: 'Enter price A and price B to compare both ticket types.',
+      abDbPct: 'Gross profit in % of net revenue',
+      abPlan: 'Result at {n} tickets',
+      beNone: 'from 1st ticket',
+      abDiff: 'A reduced ticket brings {d} less gross profit than a lead ticket ({p} less).',
+      abEquiv: 'To match the gross profit of one lead ticket you need {n} reduced tickets.',
+      abBNeg: 'Price B does not even cover variable costs – every reduced ticket increases the loss.',
+      abMixBe: 'With {s} reduced tickets, break-even is {n} ({x} × A and {y} × B) instead of {a} with price A only.',
       beHead: 'When does it pay off?',
       beEmpty: 'Enter a ticket price to see the break-even point.',
       beAnswer: 'You need to sell at least {n} for the offer to pay off.',
@@ -380,11 +416,11 @@
       price: 85, vat: 19, mode: 'standard',
       vars: ex.vars.map(r => ({ ...r })),
       fixes: ex.fixes.map(r => ({ ...r })),
-      planned: 45, capacity: 50, target: null
+      planned: 45, capacity: 50, target: null, twoPrices: false, priceB: 59, shareB: 30
     };
   }
   function emptyState() {
-    return { price: null, vat: 19, mode: 'standard', vars: [], fixes: [], planned: null, capacity: null, target: null };
+    return { price: null, vat: 19, mode: 'standard', vars: [], fixes: [], planned: null, capacity: null, target: null, twoPrices: false, priceB: null, shareB: 30 };
   }
 
   function safeGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
@@ -417,6 +453,9 @@
       })) : [],
       planned: num(s.planned),
       target: num(s.target),
+      twoPrices: !!s.twoPrices,
+      priceB: num(s.priceB),
+      shareB: num(s.shareB) ?? 30,
       capacity: num(s.capacity)
     };
   }
@@ -426,7 +465,8 @@
       price: state.price, vat: state.vat, mode: state.mode,
       vars: state.vars.map(({ name, amount, unit, rvl }) => ({ name, amount, unit, rvl })),
       fixes: state.fixes.map(({ name, amount, rvl }) => ({ name, amount, rvl })),
-      planned: state.planned, capacity: state.capacity, target: state.target
+      planned: state.planned, capacity: state.capacity, target: state.target,
+      twoPrices: state.twoPrices, priceB: state.priceB, shareB: state.shareB
     };
   }
   function persist() { safeSet(STORAGE_KEY, JSON.stringify(serialize())); }
@@ -518,6 +558,45 @@
 
   function sum(a) { return a.reduce((x, y) => x + y, 0); }
 
+  // Smallest whole N with fn(N) >= target; fn must be non-decreasing once slope > 0.
+  function minTickets(fn, target, slope) {
+    if (fn(0) >= target - 1e-9) return 0;
+    if (!(slope > 0)) return null;
+    let hi = Math.max(1, Math.ceil(target / slope)), guard = 0;
+    while (fn(hi) < target - 1e-9 && guard++ < 60) hi *= 2;
+    if (fn(hi) < target - 1e-9) return null;
+    let lo = 0;
+    while (hi - lo > 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fn(mid) >= target - 1e-9) hi = mid; else lo = mid;
+    }
+    return hi;
+  }
+
+  // Price A (lead) vs. price B (reduced) and a sales mix of both.
+  function calculateAB(s) {
+    const a = calculate(s);
+    const b = calculate({ ...s, price: s.priceB });
+    const m = Math.min(100, Math.max(0, s.shareB ?? 0)) / 100;
+    const result = N => {
+      const nA = N * (1 - m), nB = N * m;
+      const vat = a.margin
+        ? Math.max(0, nA * a.marginGross + nB * b.marginGross - a.rvlFix) * a.k
+        : (nA * a.P + nB * b.P) * a.k;
+      return nA * a.P + nB * b.P - vat - nA * a.V - nB * b.V - a.F;
+    };
+    const w = (x, y) => x * (1 - m) + y * m;
+    const mix = {
+      P: w(a.P, b.P), vat: w(a.vat, b.vat), net: w(a.net, b.net), V: w(a.V, b.V), db: w(a.db, b.db),
+      result
+    };
+    mix.be = a.F <= 0 ? 0 : minTickets(result, 0, mix.db);
+    if (mix.be) { mix.beB = Math.round(mix.be * m); mix.beA = mix.be - mix.beB; }
+    const N = s.planned && s.planned > 0 ? Math.floor(s.planned) : null;
+    mix.plan = N ? result(N) : null;
+    return { a, b, m, mix };
+  }
+
   // ─── Formatting ───────────────────────────────────────
   const locale = () => (lang === 'de' ? 'de-DE' : 'en-GB');
   function eur(v) {
@@ -542,7 +621,9 @@
   // ─── DOM refs ─────────────────────────────────────────
   const $ = id => document.getElementById(id);
   const el = {
-    price: $('price'), planned: $('planned'), capacity: $('capacity'), target: $('target'),
+    price: $('price'), priceB: $('priceB'), shareB: $('shareB'), twoPrices: $('twoPrices'),
+    priceBBox: $('priceBBox'), abCard: $('abCard'), abBox: $('abBox'), schemeTitle: $('schemeTitle'),
+    planned: $('planned'), capacity: $('capacity'), target: $('target'),
     beBox: $('beBox'),
     vatGroup: $('vatGroup'), modeGroup: $('modeGroup'), modeHint: $('modeHint'),
     varList: $('varList'), fixList: $('fixList'), varChips: $('varChips'), fixChips: $('fixChips'),
@@ -651,6 +732,7 @@
     el.alert.innerHTML = msgs.map(esc).join('<br />');
 
     renderBreakEven(c, hasPrice);
+    renderAB(hasPrice);
     renderScheme(c, hasPrice);
     renderCompare(hasPrice);
     renderChart(c, hasPrice);
@@ -755,6 +837,51 @@
   }
   const fmtVal = v => (typeof v === 'number' ? eur(v) : v);
 
+  function renderAB(hasPrice) {
+    const on = !!state.twoPrices;
+    el.priceBBox.hidden = !on;
+    el.abCard.hidden = !on;
+    document.querySelector('label[for="price"]').textContent = on ? t('priceALabel') : t('priceLabel');
+    el.schemeTitle.textContent = on ? `${t('schemeHead')} · ${t('nameA')}` : t('schemeHead');
+    if (!on) return;
+    if (!hasPrice || !(state.priceB > 0)) { el.abBox.innerHTML = `<p class="empty">${esc(t('abEmpty'))}</p>`; return; }
+    const { a, b, m, mix } = calculateAB(state);
+    const tk = n => `${int(n)} ${n === 1 ? t('ticket') : t('tickets')}`;
+    const beOf = c => c.be === null ? t('never') : (c.F <= 0 ? t('beNone') : tk(c.be));
+    const mixLabel = `${t('mix')} ${Math.round((1 - m) * 100)} / ${Math.round(m * 100)}`;
+    const rows = [
+      [t('sPrice'), a.P, b.P, mix.P, 's1 strong'],
+      [fill(a.margin ? t('sVatMargin') : t('sVatStd'), { r: a.rate }), -a.vat, -b.vat, -mix.vat, 's1'],
+      [t('sNet'), a.net, b.net, mix.net, 's1 strong'],
+      [t('sVar'), -a.V, -b.V, -mix.V, 's2'],
+      [t('sDb'), a.db, b.db, mix.db, 'hl'],
+      [t('abDbPct'), a.net > 0 ? pct(a.db / a.net) : '–', b.net > 0 ? pct(b.db / b.net) : '–', mix.net > 0 ? pct(mix.db / mix.net) : '–', ''],
+      [t('kpiBe'), beOf(a), beOf(b), mix.be === null ? t('never') : (a.F <= 0 ? t('beNone') : tk(mix.be)), 's3 strong'],
+      ...(a.plan ? [[fill(t('abPlan'), { n: int(a.plan.N) }), a.plan.total, b.plan.total, mix.plan, 's4 strong']] : [])
+    ];
+    const cell = (v, extra = '') => typeof v === 'number'
+      ? `<td class="${cls(v)} ${extra}">${eur(v)}</td>` : `<td class="${extra}">${esc(v)}</td>`;
+    let html = `<div class="table-wrap"><table class="ab-table"><thead><tr><th></th><th><b>${esc(t('nameA'))}</b>${eur(a.P)}</th><th><b>${esc(t('nameB'))}</b>${eur(b.P)}</th><th class="mix"><b>${esc(mixLabel)}</b>${esc(t('mixSub'))}</th></tr></thead><tbody>`;
+    html += rows.map(r => `<tr class="${r[4]}"><td>${esc(r[0])}</td>${cell(r[1])}${cell(r[2])}${cell(r[3], 'mix')}</tr>`).join('');
+    html += '</tbody></table></div><div class="ab-note">';
+    const diff = a.db - b.db;
+    if (a.db > 0 && diff > 0.004) {
+      html += `<p>${fill(esc(t('abDiff')), { d: `<strong>${eur(diff)}</strong>`, p: `<strong>${pct(diff / a.db, 0)}</strong>` })}`;
+      if (b.db > 0) html += ' ' + fill(esc(t('abEquiv')), { n: `<strong>${new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 }).format(a.db / b.db)}</strong>` });
+      html += '</p>';
+    }
+    if (b.db <= 0) html += `<p class="neg">${esc(t('abBNeg'))}</p>`;
+    if (mix.be !== null && a.be !== null && a.F > 0) {
+      html += `<p>${fill(esc(t('abMixBe')), {
+        s: `<strong>${Math.round(m * 100)} %</strong>`, a: tk(a.be), n: `<strong>${tk(mix.be)}</strong>`,
+        x: int(mix.beA), y: int(mix.beB)
+      })}</p>`;
+      if (state.capacity > 0 && mix.be > state.capacity) html += `<p class="neg">${esc(fill(t('warnBeCap'), { be: int(mix.be), cap: int(state.capacity) }))}</p>`;
+    }
+    html += '</div>';
+    el.abBox.innerHTML = html;
+  }
+
   function renderScheme(c, hasPrice) {
     el.scheme.innerHTML = schemeRows(c, hasPrice).map(r => r.kind === 'sep'
       ? `<tr class="sep"><td colspan="3">${esc(r.label)}</td></tr>`
@@ -856,6 +983,17 @@
   function update() { persist(); render(); }
 
   el.price.addEventListener('input', () => { state.price = numVal(el.price); update(); });
+  el.priceB.addEventListener('input', () => { state.priceB = numVal(el.priceB); update(); });
+  el.shareB.addEventListener('input', () => { state.shareB = numVal(el.shareB); update(); });
+  el.twoPrices.addEventListener('change', () => {
+    state.twoPrices = el.twoPrices.checked;
+    if (state.twoPrices && state.priceB === null && state.price > 0) {
+      state.priceB = Math.round(state.price * 0.7 * 100) / 100;
+      el.priceB.value = state.priceB;
+    }
+    update();
+    if (state.twoPrices) el.priceB.focus();
+  });
   el.planned.addEventListener('input', () => { state.planned = numVal(el.planned); update(); });
   el.capacity.addEventListener('input', () => { state.capacity = numVal(el.capacity); update(); });
   el.target.addEventListener('input', () => { state.target = numVal(el.target); update(); });
@@ -1085,7 +1223,7 @@
     };
 
     // Calculation table
-    y = heading(t('schemeHead'), y);
+    y = heading(state.twoPrices && state.priceB > 0 ? `${t('schemeHead')} · ${t('nameA')}` : t('schemeHead'), y);
     const rows = schemeRows(c, hasPrice);
     doc.autoTable({
       startY: y, margin: { left: M, right: M }, theme: 'plain',
@@ -1108,13 +1246,45 @@
     });
     y = doc.lastAutoTable.finalY + 6;
 
+    // Ticket type comparison (optional)
+    if (state.twoPrices && hasPrice && state.priceB > 0) {
+      const { a, b, m, mix } = calculateAB(state);
+      const tk = n => `${int(n)} ${t('tickets')}`;
+      const beOf = cc => cc.be === null ? t('never') : (cc.F <= 0 ? t('beNone') : tk(cc.be));
+      y = heading(t('abHead'), y);
+      const abRows = [
+        [t('sPrice'), eur(a.P), eur(b.P), eur(mix.P), 's1'],
+        [t('sNet'), eur(a.net), eur(b.net), eur(mix.net), 's1'],
+        [t('sVar'), eur(-a.V), eur(-b.V), eur(-mix.V), 's2'],
+        [t('sDb'), eur(a.db), eur(b.db), eur(mix.db), 'hl'],
+        [t('kpiBe'), beOf(a), beOf(b), mix.be === null ? t('never') : (a.F <= 0 ? t('beNone') : `${tk(mix.be)} (${int(mix.beA)} A + ${int(mix.beB)} B)`), 's3'],
+        ...(a.plan ? [[fill(t('abPlan'), { n: int(a.plan.N) }), eur(a.plan.total), eur(b.plan.total), eur(mix.plan), 's4']] : [])
+      ];
+      doc.autoTable({
+        startY: y, margin: { left: M, right: M }, theme: 'plain',
+        head: [['', pdfText(`${t('nameA')}`), pdfText(`${t('nameB')}`), pdfText(`${t('mix')} ${Math.round((1 - m) * 100)} / ${Math.round(m * 100)}`)]],
+        body: abRows.map(r => r.slice(0, 4).map(pdfText)),
+        styles: { font: 'helvetica', fontSize: fs(7.8), cellPadding: { top: fs(1), bottom: fs(1), left: 2.2, right: 2.2 }, textColor: PDFC.navy, lineColor: PDFC.white, lineWidth: { bottom: 0.25 } },
+        headStyles: { fontStyle: 'bold', textColor: PDFC.muted, fontSize: fs(7) },
+        columnStyles: { 1: { halign: 'right', cellWidth: 34 }, 2: { halign: 'right', cellWidth: 34 }, 3: { halign: 'right', cellWidth: 48 } },
+        didParseCell: d => {
+          if (d.section === 'head') { if (d.column.index > 0) d.cell.styles.halign = 'right'; return; }
+          const r = abRows[d.row.index];
+          if (r[4] === 'hl') { d.cell.styles.fillColor = PDFC.navy; d.cell.styles.textColor = PDFC.white; d.cell.styles.fontStyle = 'bold'; }
+          else d.cell.styles.fillColor = PDFC[r[4]];
+        }
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
     // Inputs: three tables side by side
     y = heading(t('pdfInputs'), y);
     const colGap = 4, colW = (CW - 2 * colGap) / 3;
     const mode = state.mode === 'margin' ? t('modeMargin') : t('modeStandard');
     const opt = v => (v === null || v === undefined || v === '' ? '–' : v);
     const base = [
-      [t('priceLabel'), hasPrice ? eur(state.price) : '–', 's1'],
+      [state.twoPrices ? t('priceALabel') : t('priceLabel'), hasPrice ? eur(state.price) : '–', 's1'],
+      ...(state.twoPrices ? [[t('priceBLabel'), state.priceB > 0 ? eur(state.priceB) : '–', 's1'], [t('shareBLabel'), `${int(state.shareB ?? 0)} %`, 's1']] : []),
       [t('vatLabel'), `${state.vat} %`, 's1'],
       [t('modeLabel'), mode, 's1'],
       [t('plannedLabel'), opt(state.planned && int(state.planned)), 's4'],
@@ -1142,7 +1312,7 @@
         body: body.map(r => [pdfText(r[0]), pdfText(r[1])]),
         styles: { font: 'helvetica', fontSize: fs(7.4), cellPadding: { top: fs(1), bottom: fs(1), left: 2, right: 2 }, textColor: PDFC.navy, lineColor: PDFC.white, lineWidth: { bottom: 0.25 }, overflow: 'linebreak' },
         headStyles: { fillColor: badge, textColor: ink, fontStyle: 'bold', fontSize: fs(7.6) },
-        columnStyles: { 1: { halign: 'right', cellWidth: colW * 0.38 } },
+        columnStyles: { 1: { halign: 'right', cellWidth: colW * 0.46 } },
         didParseCell: d => {
           if (d.section !== 'body') return;
           const r = body[d.row.index];
@@ -1199,6 +1369,9 @@
     el.price.value = state.price ?? '';
     el.planned.value = state.planned ?? '';
     el.target.value = state.target ?? '';
+    el.priceB.value = state.priceB ?? '';
+    el.shareB.value = state.shareB ?? '';
+    el.twoPrices.checked = !!state.twoPrices;
     el.capacity.value = state.capacity ?? '';
   }
 
